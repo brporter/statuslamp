@@ -37,7 +37,7 @@ namespace StatusService
             var builder = new ContainerBuilder();
 
             // builder.RegisterType<Repository.InMemoryStatusRepository>().As<Repository.IStatusRepository>().SingleInstance();
-            builder.RegisterType<Repository.TableStorageStatusRepository>().As<Repository.IStatusRepository>().SingleInstance();
+            builder.RegisterType<Services.TableStorageStatusService>().As<Services.IStatusService>().SingleInstance();
             builder.Populate(services);
 
             this.ApplicationContainer = builder.Build();

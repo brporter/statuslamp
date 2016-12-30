@@ -1,14 +1,14 @@
-namespace StatusService.Repository
+namespace StatusService.Services
 {
     using System;
     using System.Collections.Concurrent;
 
-    public class InMemoryStatusRepository 
-        : IStatusRepository 
+    public class InMemoryStatusService
+        : IStatusService 
     {
         readonly ConcurrentDictionary<Guid, string> _status;
 
-        public InMemoryStatusRepository()
+        public InMemoryStatusService()
         {
             _status = new ConcurrentDictionary<Guid, string>();
         }

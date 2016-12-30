@@ -1,27 +1,35 @@
-namespace StatusService.Repository {
+namespace StatusService.Services {
     using System;
     using Microsoft.WindowsAzure.Storage;
     using Microsoft.WindowsAzure.Storage.Table;
     using Microsoft.Extensions.Options;
 
-    public class TableStorageStatusRepository : IStatusRepository
+    public class TableStorageStatusService 
+        : IStatusService
     {
         const int TableCreationTimeout = 60000; // milliseconds
+        const string DeviceIdentifierRowKey = "DeviceIdentifier";
         const string Unknown = "Unknown";
 
         readonly CloudTableClient _tableClient;
-        readonly CloudTable _table;
+        readonly CloudTable _deviceStatusTable;
+        readonly CloudTable _deviceIdentifierTable;
 
-        public TableStorageStatusRepository(IOptions<AzureOptions> azureOptions)
+        public TableStorageStatusService(IOptions<AzureOptions> azureOptions)
         {
             var account = CloudStorageAccount.Parse(azureOptions.Value.StorageConnectionString);
             _tableClient = account.CreateCloudTableClient();
-            _table = _tableClient.GetTableReference("DeviceStatus");
+            _deviceStatusTable = _tableClient.GetTableReference("DeviceStatus");
+            _deviceIdentifierTable = _tableClient.GetTableReference("DeviceIdentifiers");
 
-            var resultTask = _table.CreateIfNotExistsAsync();
+            var statusTableCreationTask = _deviceStatusTable.CreateIfNotExistsAsync();
+            var deviceIdTableCreationTask = _deviceIdentifierTable.CreateIfNotExistsAsync();            
 
-            if (!resultTask.Wait(TableCreationTimeout))
-                throw new InvalidOperationException("Failed to ensure table storage exists.");
+            if (!statusTableCreationTask.Wait(TableCreationTimeout))
+                throw new InvalidOperationException("Failed to ensure status table storage exists.");
+
+            if (!deviceIdTableCreationTask.Wait(TableCreationTimeout))
+                throw new InvalidOperationException("Failed to ensure device identifier table storage exists.");
         }
 
         public string GetStatus(Guid deviceIdentifier)
@@ -29,7 +37,7 @@ namespace StatusService.Repository {
             var key = deviceIdentifier.ToString();
 
             var operation = TableOperation.Retrieve<StatusEntity>(key, key);
-            var resultTask = _table.ExecuteAsync(operation);
+            var resultTask = _deviceStatusTable.ExecuteAsync(operation);
 
             resultTask.Wait();
 
@@ -50,7 +58,7 @@ namespace StatusService.Repository {
             };
 
             var operation = TableOperation.InsertOrReplace(entity);
-            var resultTask = _table.ExecuteAsync(operation);
+            var resultTask = _deviceStatusTable.ExecuteAsync(operation);
 
             resultTask.Wait();
         }

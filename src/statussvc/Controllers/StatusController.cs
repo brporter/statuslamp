@@ -2,23 +2,23 @@ namespace StatusService.Controllers
 {
     using System;
     using Microsoft.AspNetCore.Mvc;
-    using StatusService.Repository;
+    using StatusService.Services;
     using StatusService.Models;
 
     [Route("api/[controller]")]
     public class StatusController 
         : Controller
     {
-        readonly IStatusRepository _statusRepo;
+        readonly IStatusService _statusRepo;
 
         private StatusController() { }
 
-        public StatusController(IStatusRepository statusRepo)
+        public StatusController(IStatusService statusRepo)
         {
             _statusRepo = statusRepo;
         }
 
-        // GET api/values/5
+        // GET api/status/5
         [HttpGet("{id:guid}")]
         public DeviceStatus Get(Guid id)
         {
