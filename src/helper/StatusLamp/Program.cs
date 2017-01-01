@@ -1,6 +1,7 @@
 ﻿namespace StatusLamp
 {
     using System;
+    using System.Collections.Generic;
     using System.Drawing;
     using Microsoft.Lync.Model;
     using System.Net;
@@ -25,6 +26,15 @@
         private class StatusSpammer
             : Form
         {
+            readonly Dictionary<ContactAvailability, byte[]> _colorMap = new Dictionary<ContactAvailability, byte[]>()
+            {
+                { ContactAvailability.Away, new byte[] { Color.Yellow.R, Color.Yellow.G, Color.Yellow.B } },
+                { ContactAvailability.TemporarilyAway,  new byte[] { Color.Yellow.R, Color.Yellow.G, Color.Yellow.B }  },
+                { ContactAvailability.Busy,  new byte[] { Color.Red.R, Color.Red.G, Color.Red.B }  },
+                { ContactAvailability.DoNotDisturb,  new byte[] { Color.Purple.R, Color.Purple.G, Color.Purple.B }  },
+                { ContactAvailability.Free,  new byte[] { Color.Green.R, Color.Green.G, Color.Green.B }  },
+                { ContactAvailability.Offline,  new byte[] { Color.Black.R, Color.Black.G, Color.Black.B }  }
+            };
 
             readonly IPEndPoint _broadcastEndPoint;
             readonly NotifyIcon _notifyIcon;
@@ -149,14 +159,9 @@
                 base.Dispose(disposing);
             }
 
-            private byte[] AsPayload<T>(T e) where T : struct, IConvertible
+            private byte[] AsPayload(ContactAvailability ca)
             {
-                if (!typeof(T).IsEnum)
-                    throw new ArgumentException("e must be an enum type");
-
-                var name = Enum.GetName(typeof(T), e);
-
-                return System.Text.Encoding.UTF8.GetBytes(name);
+                return _colorMap[ca];
             }
         }
     }
