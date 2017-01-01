@@ -1,16 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using Microsoft.Lync.Model;
-using System.Net;
-using System.Net.Sockets;
-using System.Windows.Forms;
-using Microsoft.Win32;
-
-namespace StatusLamp
+﻿namespace StatusLamp
 {
+    using System;
+    using System.Drawing;
+    using Microsoft.Lync.Model;
+    using System.Net;
+    using System.Net.Sockets;
+    using System.Windows.Forms;
+    using Microsoft.Win32;
+
     static class Program
     {
+        const int BroadcastPort = 43123;
+        const int OperationInterval = 10000;
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
@@ -23,21 +25,23 @@ namespace StatusLamp
         private class StatusSpammer
             : Form
         {
-            const int BroadcastPort = 43123;
-            const int BroadcastInterval = 10000;
-            const string AnimationFileName = "animations.json";
 
             readonly IPEndPoint _broadcastEndPoint;
             readonly NotifyIcon _notifyIcon;
             readonly ContextMenu _contextMenu;
-            readonly Client _client;
-            readonly System.Threading.Timer _broadcastTimer;
-            readonly Dictionary<ContactAvailability, StateAnimation> _stateAnimations;
+
+            Client _client;
+            System.Threading.Timer _broadcastTimer;
+            Timer _initializationTimer;
 
             ContactAvailability _currentAvailability;
 
             public StatusSpammer()
             {
+                SystemEvents.PowerModeChanged += (sender, powerArgs) => { _currentAvailability = ContactAvailability.Offline; SendAvailability(); };
+
+                _currentAvailability = ContactAvailability.Offline;
+
                 _broadcastEndPoint = new IPEndPoint(IPAddress.Broadcast, BroadcastPort);
                 _notifyIcon = new NotifyIcon();
                 _contextMenu = new ContextMenu();
@@ -49,27 +53,39 @@ namespace StatusLamp
                 _notifyIcon.ContextMenu = _contextMenu;
                 _notifyIcon.Visible = true;
 
-                _stateAnimations = new Dictionary<ContactAvailability, StateAnimation>();
-                var instances = Newtonsoft.Json.JsonConvert.DeserializeObject<StateAnimation[]>(System.IO.File.ReadAllText("animations.json"));
-                foreach (var instance in instances)
-                {
-                    _stateAnimations.Add(instance.State, instance);
-                }
+                _broadcastTimer = new System.Threading.Timer((_) => SendAvailability(), null, 0, OperationInterval);
 
-                SystemEvents.PowerModeChanged += (sender, powerArgs) => { _currentAvailability = ContactAvailability.Offline; SendAvailability(); };
+                _initializationTimer = new Timer();
+                _initializationTimer.Tick += (sender, e) => InitializeLyncClient();
+                _initializationTimer.Interval = OperationInterval; // 10 seconds
+                _initializationTimer.Start();
+            }
 
-                _client = LyncClient.GetClient();
-                _client.StateChanged += (sender, stateChangeArgs) => AvailabilityEventWireUp();
+            private void InitializeLyncClient()
+            {
+                System.Diagnostics.Debug.WriteLine($"{System.Threading.Thread.CurrentThread.ManagedThreadId}");
 
-                _currentAvailability = FetchAvailability();
+                if (_client != null && _client.State != ClientState.Invalid)
+                    return;
 
-                _broadcastTimer = new System.Threading.Timer((_) => SendAvailability(), null, 0, 10000);
+                this.Invoke(new Action(() => {
+                    try
+                    {
 
-                // Wire for availability events
-                AvailabilityEventWireUp();
+                        _client = LyncClient.GetClient();
+                        _client.StateChanged += (sender, stateChangeArgs) => AvailabilityEventWireUp();
 
-                // Trigger an initial broadcast
-                SendAvailability();
+                        _currentAvailability = FetchAvailability();
+
+                        // Wire for availability events
+                        AvailabilityEventWireUp();
+
+                        // Trigger an initial broadcast
+                        SendAvailability();
+                    }
+                    catch (ClientNotFoundException)
+                    { }
+                }));
             }
 
             private void AvailabilityEventWireUp()
@@ -109,7 +125,7 @@ namespace StatusLamp
 
             private void SendAvailability()
             {
-                byte[] payload = _stateAnimations[_currentAvailability].AsPayload();
+                byte[] payload = AsPayload(_currentAvailability);
 
                 using (var client = new UdpClient())
                 {
@@ -134,43 +150,16 @@ namespace StatusLamp
 
                 base.Dispose(disposing);
             }
-        }
-    }
 
-    public class StateAnimation
-    {
-        byte[] _payload = null;
-
-        public ContactAvailability State { get; set; }
-        public StateValue[] Values { get; set; }
-
-        public byte[] AsPayload()
-        {
-            if (_payload == null && Values != null)
+            private byte[] AsPayload<T>(T e) where T : struct, IConvertible
             {
-                _payload = new byte[Values.Length * 5];
+                if (!typeof(T).IsEnum)
+                    throw new ArgumentException("e must be an enum type");
 
-                for (int i = 0; i < Values.Length; i++)
-                {
-                    var payloadIndex = i * 5;
-                    _payload[payloadIndex++] = Values[i].Pixel;
-                    _payload[payloadIndex++] = Values[i].Red;
-                    _payload[payloadIndex++] = Values[i].Green;
-                    _payload[payloadIndex++] = Values[i].Blue;
-                    _payload[payloadIndex] = Convert.ToByte(Values[i].Transition);
-                }
+                var name = Enum.GetName(typeof(T), e);
+
+                return System.Text.Encoding.UTF8.GetBytes(name);
             }
-
-            return _payload ?? new byte[] { };
         }
-    }
-
-    public class StateValue
-    {
-        public byte Pixel { get; set; }
-        public byte Red { get; set; }
-        public byte Green { get; set; }
-        public byte Blue { get; set; }
-        public bool Transition { get; set; }
     }
 }
