@@ -63,8 +63,6 @@
 
             private void InitializeLyncClient()
             {
-                System.Diagnostics.Debug.WriteLine($"{System.Threading.Thread.CurrentThread.ManagedThreadId}");
-
                 if (_client != null && _client.State != ClientState.Invalid)
                     return;
 
